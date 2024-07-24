@@ -9,7 +9,7 @@ function_set = ['add', 'sub', 'mul', 'div',
 
 
 def transformer():
-    return SymbolicTransformer(generations=20, population_size=2000,
+    return SymbolicTransformer(generations=200, population_size=2000,
                                hall_of_fame=100, n_components=10,
                                function_set=function_set, parsimony_coefficient=0.0005,
                                max_samples=0.9, verbose=1, random_state=0, n_jobs=3)
