@@ -56,4 +56,8 @@ class Layers:
         
     @classmethod
     def get_layers_names(cls):
-        return list(cls.__blocks_dict.keys())
+        return [method for method in dir(cls) if not method.startswith("__") and not method.startswith("get") and not method.startswith("exec")]
+    
+
+if __name__ == '__main__':
+    print(Layers.get_layers_names())
