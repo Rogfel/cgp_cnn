@@ -103,19 +103,15 @@ def evaluate(genome: List[float], image: np.ndarray) -> np.ndarray:
         if func.n_inputs == 1:
             output = func.func(node_outputs[input1_idx], param)
         else:
-            output = func.func(node_outputs[input1_idx], 
-                                node_outputs[input2_idx], param)
+            output = func.func(node_outputs[input1_idx],
+                               node_outputs[input2_idx], param)
         
         node_outputs.append(output)
     
     # Collect output features
-    features = []
+    # And Global average pooling to get a single value per feature map
     output_genes = genome[-N_OUTPUTS:]
-    for output_idx in output_genes:
-        output_idx = int(output_idx)
-        feature = node_outputs[output_idx]
-        # Global average pooling to get a single value per feature map
-        features.append(np.mean(feature))
+    features = [np.mean([node_outputs[int(output_idx)] for output_idx in output_genes])]
         
     return np.array(features)
 
@@ -155,17 +151,8 @@ def evolve(train_images: List[np.ndarray],
     
     def compute_fitness(genome: List[float]) -> float:
         """Compute fitness as classification accuracy"""
-        features_list = []
-        for image in train_images:
-            features = evaluate(genome, image)
-            features_list.append(features)
-        features_array = np.stack(features_list)
-
-        features_test_list = []
-        for image in test_images:
-            features = evaluate(genome, image)
-            features_test_list.append(features)
-        features_test_array = np.stack(features_test_list)
+        features_array = np.stack([evaluate(genome, image) for image in train_images])
+        features_test_array = np.stack([evaluate(genome, image) for image in test_images])
         
         # training Model
         eval_model.fit(features_array, labels_onehot)
@@ -189,12 +176,11 @@ def evolve(train_images: List[np.ndarray],
         # Create new population through mutation
         new_population = [best_genome]  # Keep best individual (elitism)
         while len(new_population) < population_size:
-            offspring = mutate(best_genome, mutation_rate)
-            new_population.append(offspring)
+            new_population.append(mutate(best_genome, mutation_rate))
         
         population = new_population
         
-    return best_genome, best_fitness
+    return best_genome, best_test_fitness
 
 # def extract_features(image_path: str, cgp_genome: List[float], cgp_instance: ImageCGP) -> np.ndarray:
 #     """Utility function to extract features from a new image using trained CGP"""
