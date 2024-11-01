@@ -17,8 +17,8 @@ cgp.INPUT_SHAPE = (load.IMG_HEIGHT, load.IMG_WIDTH, 3)  # RGB images
 cgp.FUNCTIONS = vision_functions()
 cgp.N_NODES = cgp.get_n_nodes()
 # Evolve CGP
-best_genome, best_fitness = cgp.evolve(train_data[:100], train_target[:100],
-                                       test_data[:20], test_target[:20], n_generations=10,
+best_genome, best_fitness = cgp.evolve(train_data[:10], train_target[:10],
+                                       test_data[:2], test_target[:2], n_generations=10,
                                        population_size=50, eval_model=random_forests.classification_model())
 
 print(f"Training completed. Best fitness: {best_fitness}")

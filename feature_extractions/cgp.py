@@ -1,10 +1,6 @@
-import numpy as np
-import cv2
-from dataclasses import dataclass
 import random
+import numpy as np
 from typing import List, Tuple, Type
-import torch
-import torch.nn.functional as F
 from classifications import evaluation
 
 

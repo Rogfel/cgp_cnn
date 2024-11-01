@@ -35,7 +35,7 @@ def data():
                 data = np.concatenate((data, np.array(batch[0])), axis=0)
                 target = np.concatenate((target, np.array(batch[1])), axis=0)
         return data, target
-    print("load images")
+
     train_data, train_target = transform_data(train_ds)
     test_data, test_target = transform_data(test_ds)
 
