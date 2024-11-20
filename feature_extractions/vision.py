@@ -24,47 +24,47 @@ def vision_functions() -> List[NodeFunction]:
                                  [param, 1.0, param],
                                  [param, param, param]])
                 for c in range(x.shape[2]):
-                    result[..., c] = ndimage.convolve(np.clip(x[..., c], -1e6, 1e6), kernel, mode='reflect')
-                return np.clip(result, -1e6, 1e6)
+                    result[..., c] = ndimage.convolve(x[..., c], kernel, mode='reflect')
+                return result
             
             kernel = np.array([[param, param, param],
                                 [param, 1.0, param],
                                 [param, param, param]])
-            result = ndimage.convolve(np.clip(x, -1e6, 1e6), kernel, mode='reflect')
-            return np.clip(result, -1e6, 1e6)
+            result = ndimage.convolve(x, kernel, mode='reflect')
+            return result
             
         def max_pool(x: np.ndarray, param: float) -> np.ndarray:
             size = max(2, int(abs(param * 3)))
             if len(x.shape) == 3:
                 result = np.zeros_like(x)
                 for c in range(x.shape[2]):
-                    result[..., c] = ndimage.maximum_filter(np.clip(x, -1e6, 1e6), size=size)
-                return np.clip(result, -1e6, 1e6)
-            return np.clip(ndimage.maximum_filter(np.clip(x, -1e6, 1e6), size=size), -1e6, 1e6)
+                    result[..., c] = ndimage.maximum_filter(x, size=size)
+                return result
+            return ndimage.maximum_filter(x, size=size)
             
         def avg_pool(x: np.ndarray, param: float) -> np.ndarray:
             size = max(2, int(abs(param * 3)))
             if len(x.shape) == 3:
                 result = np.zeros_like(x)
                 for c in range(x.shape[2]):
-                    result[..., c] = ndimage.uniform_filter(np.clip(x, -1e6, 1e6), size=size)
+                    result[..., c] = ndimage.uniform_filter(x, size=size)
                 return result
-            return np.clip(ndimage.uniform_filter(np.clip(x, -1e6, 1e6), size=size), -1e6, 1e6)
+            return ndimage.uniform_filter(x, size=size)
         
         def gaussian_blur(x: np.ndarray, param: float) -> np.ndarray:
             sigma = abs(param)
             if len(x.shape) == 3:
                 result = np.zeros_like(x)
                 for c in range(x.shape[2]):
-                    result[..., c] = ndimage.gaussian_filter(np.clip(x, -1e6, 1e6), sigma=sigma)
-                return np.clip(result, -1e6, 1e6)
-            return np.clip(ndimage.gaussian_filter(np.clip(x, -1e6, 1e6), sigma=sigma), -1e6, 1e6)
+                    result[..., c] = ndimage.gaussian_filter(x, sigma=sigma)
+                return result
+            return ndimage.gaussian_filter(x, sigma=sigma)
             
         def sobel_x(x: np.ndarray, param: float) -> np.ndarray:
             if len(x.shape) == 3:
                 result = np.zeros_like(x)
                 for c in range(x.shape[2]):
-                    result[..., c] = ndimage.sobel(np.clip(x, -1e6, 1e6), axis=0) * param
+                    result[..., c] = ndimage.sobel(x, axis=0) * param
                 return result
             return ndimage.sobel(x, axis=0) * param
             
@@ -72,7 +72,7 @@ def vision_functions() -> List[NodeFunction]:
             if len(x.shape) == 3:
                 result = np.zeros_like(x)
                 for c in range(x.shape[2]):
-                    result[..., c] = ndimage.sobel(np.clip(x, -1e6, 1e6), axis=1) * param
+                    result[..., c] = ndimage.sobel(x, axis=1) * param
                 return result
             return ndimage.sobel(x, axis=1) * param
             

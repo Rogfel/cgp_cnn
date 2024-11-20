@@ -11,7 +11,7 @@ IMG_WIDTH = 64
 def data():
     train_ds = tf.keras.utils.image_dataset_from_directory(
                     PATH_DATASET,
-                    validation_split=0.2,
+                    validation_split=0.8,
                     subset="training",
                     seed=123,
                     image_size=(IMG_HEIGHT, IMG_WIDTH),
@@ -19,7 +19,7 @@ def data():
 
     test_ds = tf.keras.utils.image_dataset_from_directory(
                     PATH_DATASET,
-                    validation_split=0.2,
+                    validation_split=0.8,
                     subset="validation",
                     seed=123,
                     image_size=(IMG_HEIGHT, IMG_WIDTH),

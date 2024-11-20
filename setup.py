@@ -7,6 +7,7 @@ setup(
     author="Rogfel Thompson Martínez",
     author_email="rogfel@gmail.com",
     packages=find_packages(),
+    python_requires=">=3.7",
     install_requires=[
         'numpy',
         'scipy',
