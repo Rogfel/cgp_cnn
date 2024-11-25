@@ -2,10 +2,6 @@ import random
 import warnings
 import numpy as np
 from tqdm import tqdm
-import multiprocessing as mp
-import concurrent.futures
-from functools import partial
-from numba import cuda
 from typing import List, Tuple, Type
 from classifications import evaluation
 from feature_extractions import vision2 as vision
@@ -133,17 +129,18 @@ def mutate(genome: List[float], mutation_rate: float = 0.1) -> List[float]:
     
     return new_genome
 
-def compute_fitness_worker(genome: List[float],
-                           train_images: List[np.ndarray],
-                           train_labels: np.ndarray,
-                           eval_model: Type) -> float:
+def compute_fitness(genome: List[float],
+                    train_images: List[np.ndarray],
+                    train_labels: np.ndarray,
+                    eval_model: Type) -> float:
     """Worker function for parallel fitness computation"""
     
     try:
         evaluator = CGPEvaluator()
         
         # Extract features
-        features_train = np.array([evaluator.evaluate_image(genome, img) for img in train_images])
+        features_train = np.array([evaluator.evaluate_image(genome, img)
+        for img in tqdm(train_images, desc="    Genoma Evaluation Progress")])
         
         # Ensure features are finite
         features_train = np.nan_to_num(features_train, nan=0.0, posinf=0.0, neginf=0.0)
@@ -173,11 +170,7 @@ def evolve(train_images: List[np.ndarray],
         # Convert labels to one-hot encoding
         n_classes = len(set(train_labels))
         labels_onehot = np.eye(n_classes)[train_labels]
-        
-        # Setup multiprocessing pool
-        n_cores = max(1, mp.cpu_count() - 1)  # Leave one core free
-        pool = mp.Pool(n_cores)
-        
+                
         best_genome = None
         best_fitness = float('-inf')
         
@@ -185,16 +178,8 @@ def evolve(train_images: List[np.ndarray],
         for generation in tqdm(range(n_generations), desc="Evolution Progress"):
             try:
                 # # Prepare arguments for parallel processing
-                fitnesses = [compute_fitness_worker(genome, train_images, labels_onehot, eval_model)
-                        for genome in population]
-                
-                # Compute fitness in parallel
-                # fitnesses = pool.starmap(compute_fitness_worker,
-                #                          [(genome, train_images,
-                #                            labels_onehot, eval_model) for genome in population]
-                # )
-                # pool.close()
-                # pool.join()
+                fitnesses = [compute_fitness(genome, train_images, labels_onehot, eval_model)
+                        for genome in population]                
             
                 # Convert to numpy array for faster operations
                 # Find best individual
