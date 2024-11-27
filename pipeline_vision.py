@@ -8,8 +8,9 @@ from classifications import random_forests
 # load dataset
 print('*****1/4 Load images dataset')
 # load.PATH_DATASET = 'dataset/PetImages/'
-load.PATH_DATASET = 'dataset/pettest/'
-train_data, train_target, test_data, test_target = load.data()
+load.PATH_DATASET = 'dataset/PetImages/'
+# train_data, train_target, test_data, test_target = load.data()
+train_data, train_target = load.data()
 
 # feature extraction
 print('*****2/4 Init feature extraction')
@@ -19,8 +20,8 @@ cgp.FUNCTIONS = vision_functions()
 cgp.N_NODES = cgp.get_n_nodes()
 # Evolve CGP
 best_genome, best_fitness = cgp.evolve(train_data, train_target,
-                                       n_generations=1000,
-                                       population_size=5, eval_model=random_forests.classification_model())
+                                       n_generations=10,
+                                       population_size=3, eval_model=random_forests.classification_model())
 
-print(f"Training completed. Best fitness: {best_fitness}")
+print(f"Training completed. Best fitness: {best_fitness}\n")
 print(f"best genome: {best_genome}")

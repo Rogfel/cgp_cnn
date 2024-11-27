@@ -8,19 +8,16 @@ BATCH_SIZE = 32
 IMG_HEIGHT = 64
 IMG_WIDTH = 64
 
-def data():
-    train_ds = tf.keras.utils.image_dataset_from_directory(
-                    PATH_DATASET,
-                    validation_split=0.8,
-                    subset="training",
-                    seed=123,
-                    image_size=(IMG_HEIGHT, IMG_WIDTH),
-                    batch_size=BATCH_SIZE)
+def data(data_train: bool=True):
 
-    test_ds = tf.keras.utils.image_dataset_from_directory(
+    data_type = 'validation'
+    if data_train:
+        data_type = 'training'
+
+    dataset = tf.keras.utils.image_dataset_from_directory(
                     PATH_DATASET,
-                    validation_split=0.8,
-                    subset="validation",
+                    validation_split=0.98,
+                    subset=data_type,
                     seed=123,
                     image_size=(IMG_HEIGHT, IMG_WIDTH),
                     batch_size=BATCH_SIZE)
@@ -36,9 +33,8 @@ def data():
                 target = np.concatenate((target, np.array(batch[1])), axis=0)
         return data, target
 
-    train_data, train_target = transform_data(train_ds)
-    test_data, test_target = transform_data(test_ds)
+    dataset_data, dataset_target = transform_data(dataset)
 
-    return train_data, train_target, test_data, test_target
+    return dataset_data, dataset_target
 
 

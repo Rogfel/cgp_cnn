@@ -78,10 +78,10 @@ def vision_functions() -> List[NodeFunction]:
             return keras.layers.AveragePooling2D((pool_sizes, pool_sizes), (strides, strides),
                                                 padding="valid")(image)
         def concatenate(image0, image1):
-            return keras.layers.concatenate(axis=1)([image0, image1])
+            return keras.layers.concatenate([image0, image1])
 
         def summation(image0, image1):
-            return keras.layers.add(axis=1)([image0, image1])
+            return keras.layers.add([image0, image1])
 
         def resnet(image):
             filters=32
@@ -102,10 +102,10 @@ def vision_functions() -> List[NodeFunction]:
             NodeFunction(maxPool2D, "maxPool2D", 1),
             NodeFunction(avgPool2D, "avgPool2D", 1),
             # NodeFunction(concatenate, "concatenate", 2),
-            # NodeFunction(summation, "summation", 2)
-            # NodeFunction(resnet, "resnet", 1)
+            # NodeFunction(summation, "summation", 2),
+            NodeFunction(resnet, "resnet", 1),
             # NodeFunction(flatten, "flatten", 1)
         ]
 
 def flatten(image):
-            return keras.layers.Flatten()(image)
+    return keras.layers.Flatten()(image)

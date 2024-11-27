@@ -11,7 +11,7 @@ warnings.filterwarnings('ignore')
 
 # Global variables
 INPUT_SHAPE = None
-N_COLUMNS = 20
+N_COLUMNS = 10
 N_ROWS = 2
 N_BACK = 10
 N_OUTPUTS = 64
@@ -37,46 +37,44 @@ class CGPEvaluator:
         """Evaluate single image with error handling"""
         try:
             # Initialize node outputs with input image channels
-            node_outputs = [image[..., i] for i in range(image.shape[-1])]
+            node_outputs = [image, image]
             
             # Process each node
             for i in range(N_NODES):
                 try:
                     idx = i * GENES_PER_NODE
                     func_id = int(genome[idx] % len(FUNCTIONS))  # Ensure valid function index
-                    input1_idx = int(min(max(0, genome[idx + 1]), len(node_outputs) - 1))  # Bound check
-                    input2_idx = int(min(max(0, genome[idx + 2]), len(node_outputs) - 1))  # Bound check
+                    # input1_idx = int(min(max(0, genome[idx + 1]), len(node_outputs) - 1))  # Bound check
+                    # input2_idx = int(min(max(0, genome[idx + 2]), len(node_outputs) - 1))  # Bound check
                     
                     func = FUNCTIONS[func_id]
                     
-                    image = vision.reshape(image=node_outputs[input1_idx])
+                    # image01 = vision.reshape(image=node_outputs[0])
+                    image02 = vision.reshape(image=node_outputs[1])
                         
                     if func.n_inputs == 1:
-                        output = func.func(image)
+                        output = func.func(image02)
                     else:
-                        output = func.func(image, vision.reshape(node_outputs[input2_idx]))
-
-                    if i == N_NODES - 1:
-                        output =  vision.flatten(output)
+                        output = func.func(image02, vision.reshape(image=node_outputs[0]))                        
                     
                     # Handle NaN and Inf values
-                    output = np.nan_to_num(output, nan=0.0, posinf=0.0, neginf=0.0)
-                    node_outputs.append(output)
+                    # output = np.nan_to_num(output, nan=0.0, posinf=0.0, neginf=0.0)
+                    node_outputs[0] = output
                     
                 except Exception as e:
                     print(f"Node processing error: {e}")
-                    node_outputs.append(np.zeros_like(node_outputs[0]))
+                    node_outputs[0] = np.zeros_like(node_outputs[0])
             
             # Collect output features
-            features = []
-            output_genes = genome[-N_OUTPUTS:]
+            # features = []
+            # output_genes = genome[-N_OUTPUTS:]
             
-            for gene in output_genes:
-                idx = int(min(max(3, gene), len(node_outputs) - 1))  # Ensure valid index
-                feature = node_outputs[idx]
-                features.append(np.mean(feature))
-            
-            return np.array(features, dtype=np.float32)
+            # for gene in output_genes:
+            #     idx = int(min(max(3, gene), len(node_outputs) - 1))  # Ensure valid index
+            #     feature = node_outputs[idx]
+            #     features.append(np.mean(feature))
+            output = vision.flatten(output)
+            return np.array(output[0], dtype=np.float32)
             
         except Exception as e:
             print(f"Evaluation error: {e}")
@@ -96,8 +94,8 @@ def create_individual() -> List[float]:
             x = random.randint(max(0, i - N_BACK), i + 3 - 1)
             genome.append(x)
         
-        # Parameter gene
-        genome.append(random.uniform(-1.0, 1.0))
+        # # Parameter gene
+        # genome.append(random.uniform(-1.0, 1.0))
     
     # Output connection genes
     for _ in range(N_OUTPUTS):
@@ -122,8 +120,8 @@ def mutate(genome: List[float], mutation_rate: float = 0.1) -> List[float]:
                         max(0, node_index - N_BACK),
                         node_index + 3 - 1
                     )
-                else:  # Parameter gene
-                    new_genome[i] = random.uniform(-1.0, 1.0)
+                # else:  # Parameter gene
+                #     new_genome[i] = random.uniform(-1.0, 1.0)
             else:  # Output gene
                 new_genome[i] = random.randint(3, N_NODES + 2)
     
@@ -141,15 +139,15 @@ def compute_fitness(genome: List[float],
         # Extract features
         features_train = np.array([evaluator.evaluate_image(genome, img)
         for img in tqdm(train_images, desc="    Genoma Evaluation Progress")])
-        
+
         # Ensure features are finite
         features_train = np.nan_to_num(features_train, nan=0.0, posinf=0.0, neginf=0.0)
         
         # Fit model and compute scores
         eval_model.fit(features_train, train_labels)
-        train_score = evaluation.roc_auc_score(eval_model.predict(features_train), train_labels)
+        # train_score = evaluation.roc_auc_score(eval_model.predict(features_train), train_labels)
         
-        return train_score
+        return eval_model.score(features_train, train_labels)
         
     except Exception as e:
         print(f"Fitness computation error: {e}")
