@@ -4,6 +4,7 @@ from dataset import load
 from feature_extractions.test_cnn import sequency
 from feature_simplifications import tgp
 from classifications import random_forests
+from classifications import evaluation
 
 
 # load dataset
@@ -51,7 +52,7 @@ new_test_data = np.hstack((test_extraction_data, GP.transform(test_extraction_da
 print('***** 4/4 Init Classification')
 RF = random_forests.classification_model()
 RF.fit(new_train_data, train_extraction_target)
-print(RF.score(new_test_data, test_extraction_target))
+print(evaluation.roc_auc_score(new_test_data, test_extraction_target))
 
 # RF.fit(train_extraction_data, train_extraction_target)
-# print(RF.score(test_extraction_data, test_extraction_target))
+# print(evaluation.roc_auc_score(test_extraction_data, test_extraction_target))

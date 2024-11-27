@@ -1,22 +1,22 @@
 # https://github.com/visionatseecs/keras-starter/blob/main/keras_alexnet.ipynb
-from feature_extractions.cnn import conv2D, maxPool2D, flatten
+from feature_extractions import cnn
 
      
 def sequency(images_batch):
     # x = rescaling(image=image)
-    x = conv2D(image=images_batch, filters=11, kernel_size=4)
-    x = maxPool2D(image=x, pool_sizes=3, strides=2)
+    x = cnn.Layers.exec('conv2D',[images_batch, 11, 4])
+    x = cnn.Layers.exec('maxPool2D', [x, 3, 2])
 
-    x = conv2D(image=x, filters=5)
-    x = maxPool2D(image=x, pool_sizes=3, strides=2)
+    x = cnn.Layers.exec('conv2D', [x, 5, 3])
+    x = cnn.Layers.exec('maxPool2D', [x, 3, 2])
 
-    x = conv2D(image=x, filters=3)
-    x = conv2D(image=x, filters=3)
-    x = conv2D(image=x, filters=3)
+    x = cnn.Layers.exec('conv2D', [x, 3, 3])
+    x = cnn.Layers.exec('conv2D', [x, 3, 3])
+    x = cnn.Layers.exec('conv2D', [x, 3, 3])
 
-    x = maxPool2D(image=x, pool_sizes=3, strides=2)
+    x = cnn.Layers.exec('maxPool2D', [x, 3, 2])
 
-    return flatten(image=x)
+    return cnn.Layers.exec('flatten', [x])
 
 
 if __name__ == '__main__':
