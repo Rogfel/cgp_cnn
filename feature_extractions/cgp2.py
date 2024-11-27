@@ -138,15 +138,14 @@ def compute_fitness(genome: List[float],
         
         # Extract features
         features_train = np.array([evaluator.evaluate_image(genome, img)
-        for img in tqdm(train_images, desc="    Genoma Evaluation Progress")])
+                                   for img in tqdm(train_images, desc="    Genoma Evaluation Progress")])
 
         # Ensure features are finite
         features_train = np.nan_to_num(features_train, nan=0.0, posinf=0.0, neginf=0.0)
         
         # Fit model and compute scores
         eval_model.fit(features_train, train_labels)
-        # train_score = evaluation.roc_auc_score(eval_model.predict(features_train), train_labels)
-        
+            
         return eval_model.score(features_train, train_labels)
         
     except Exception as e:
@@ -173,9 +172,10 @@ def evolve(train_images: List[np.ndarray],
         best_fitness = float('-inf')
         
         # Progress bar for generations
-        for generation in tqdm(range(n_generations), desc="Evolution Progress"):
+        for generation in range(n_generations):
             try:
-                # # Prepare arguments for parallel processing
+                print(f"\nGeneration {generation + 1}/{n_generations}")
+                # Prepare arguments for processing
                 fitnesses = [compute_fitness(genome, train_images, labels_onehot, eval_model)
                         for genome in population]                
             
@@ -190,18 +190,13 @@ def evolve(train_images: List[np.ndarray],
                     best_genome = current_best_genome.copy()
                     best_fitness = current_best_fitness
                 
-                print(f"\nGeneration {generation + 1}/{n_generations}")
                 print(f"Best Fitness: {fitnesses[best_idx]:.4f}")
                 
-                # Create new population
-                new_population = [best_genome]  # Elitism
-                
+                # Create new elite population                
                 # Fill rest of population with mutated versions of best
-                while len(new_population) < population_size:
-                    offspring = mutate(best_genome, mutation_rate)
-                    new_population.append(offspring)
-                
-                population = new_population
+                population = [mutate(best_genome, mutation_rate)
+                              for _ in range(population_size - 1)]
+                population.append(best_genome)
                 
             except Exception as e:
                 print(f"Generation error: {e}")

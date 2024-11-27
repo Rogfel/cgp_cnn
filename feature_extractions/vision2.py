@@ -97,14 +97,13 @@ def vision_functions() -> List[NodeFunction]:
             NodeFunction(conv2D32_5, "conv2D32_5", 1),
             NodeFunction(conv2D64_3, "conv2D64_3", 1),
             NodeFunction(conv2D64_5, "conv2D64_5", 1),
-            # NodeFunction(conv2D128_3, "conv2D128_3", 1),
-            # NodeFunction(conv2D128_5, "conv2D128_5", 1),
+            NodeFunction(conv2D128_3, "conv2D128_3", 1),
+            NodeFunction(conv2D128_5, "conv2D128_5", 1),
             NodeFunction(maxPool2D, "maxPool2D", 1),
             NodeFunction(avgPool2D, "avgPool2D", 1),
             # NodeFunction(concatenate, "concatenate", 2),
             # NodeFunction(summation, "summation", 2),
             NodeFunction(resnet, "resnet", 1),
-            # NodeFunction(flatten, "flatten", 1)
         ]
 
 def flatten(image):
