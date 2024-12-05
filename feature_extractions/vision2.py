@@ -103,7 +103,7 @@ def vision_functions() -> List[NodeFunction]:
             kernel_size=3
             x = __conv2D(image=image, filters=filters, kernel_size=kernel_size)
             x = keras.layers.BatchNormalization()(image)
-            x = keras.layers.add(image0=image, image1=x)
+            x = keras.layers.add([image, x])
             return keras.layers.ReLU()(x)
 
         return [
