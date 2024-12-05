@@ -20,8 +20,8 @@ cgp.FUNCTIONS = vision_functions()
 cgp.N_NODES = cgp.get_n_nodes()
 # Evolve CGP
 best_genome, best_fitness = cgp.evolve(train_data, train_target,
-                                       n_generations=10,
-                                       population_size=3, eval_model=random_forests.classification_model())
+                                       n_generations=100,
+                                       population_size=5, eval_model=random_forests.classification_model())
 
 print(f"Training completed. Best fitness: {best_fitness}\n")
 print(f"best genome: {best_genome}")

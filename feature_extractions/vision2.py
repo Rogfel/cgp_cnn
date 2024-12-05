@@ -77,18 +77,33 @@ def vision_functions() -> List[NodeFunction]:
             strides=2
             return keras.layers.AveragePooling2D((pool_sizes, pool_sizes), (strides, strides),
                                                 padding="valid")(image)
+        
+        def __reshape(image0, image1):
+            image_list = [image0, image1]
+            
+            small_index, large_index = (0, 1) if image_list[0].shape[-1] < image_list[1].shape[-1] else (1, 0)
+            if image_list[small_index].shape[-1] != image_list[large_index].shape[-1]:                 
+                 image_list[small_index] = __conv2D(image=image_list[small_index],
+                                                    filters=image_list[large_index].shape[-1], kernel_size=1)
+                 
+            if image_list[small_index].shape[:2] != image_list[large_index].shape[:2]:
+                    small_index, large_index = (0, 1) if image_list[small_index].shape[-2] > image_list[large_index].shape[-2] else (1, 0)
+                    image_list[large_index] = keras.layers.Resizing(image_list[small_index].shape[1],
+                                                                    image_list[small_index].shape[2])(image_list[large_index])
+            return image_list
+        
         def concatenate(image0, image1):
-            return keras.layers.concatenate([image0, image1])
+            return keras.layers.concatenate(__reshape(image0, image1))
 
         def summation(image0, image1):
-            return keras.layers.add([image0, image1])
+            return keras.layers.add(__reshape(image0, image1))
 
         def resnet(image):
             filters=32
             kernel_size=3
             x = __conv2D(image=image, filters=filters, kernel_size=kernel_size)
             x = keras.layers.BatchNormalization()(image)
-            x = summation(image0=image, image1=x)
+            x = keras.layers.add(image0=image, image1=x)
             return keras.layers.ReLU()(x)
 
         return [
@@ -101,8 +116,8 @@ def vision_functions() -> List[NodeFunction]:
             NodeFunction(conv2D128_5, "conv2D128_5", 1),
             NodeFunction(maxPool2D, "maxPool2D", 1),
             NodeFunction(avgPool2D, "avgPool2D", 1),
-            # NodeFunction(concatenate, "concatenate", 2),
-            # NodeFunction(summation, "summation", 2),
+            NodeFunction(concatenate, "concatenate", 2),
+            NodeFunction(summation, "summation", 2),
             NodeFunction(resnet, "resnet", 1),
         ]
 
