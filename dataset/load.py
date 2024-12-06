@@ -16,7 +16,7 @@ def data(data_train: bool=True):
 
     dataset = tf.keras.utils.image_dataset_from_directory(
                     PATH_DATASET,
-                    validation_split=0.96,
+                    validation_split=0.99,
                     subset=data_type,
                     seed=123,
                     image_size=(IMG_HEIGHT, IMG_WIDTH),
