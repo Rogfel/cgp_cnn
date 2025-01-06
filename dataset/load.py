@@ -1,6 +1,8 @@
-# https://www.tensorflow.org/tutorials/load_data/images
+import os
 import numpy as np
-import tensorflow as tf
+import torchvision.transforms as transforms
+import torchvision.datasets as datasets
+from torch.utils.data import DataLoader
 
 
 PATH_DATASET = 'dataset/PetImages/'
@@ -8,33 +10,33 @@ BATCH_SIZE = 32
 IMG_HEIGHT = 64
 IMG_WIDTH = 64
 
-def data(data_train: bool=True):
 
-    data_type = 'validation'
-    if data_train:
-        data_type = 'training'
+def data(data_type='train'):
 
-    dataset = tf.keras.utils.image_dataset_from_directory(
-                    PATH_DATASET,
-                    validation_split=0.99,
-                    subset=data_type,
-                    seed=123,
-                    image_size=(IMG_HEIGHT, IMG_WIDTH),
-                    batch_size=BATCH_SIZE)
-    
-    def transform_data(data_target):
-        data = None
-        for batch in data_target:
-            if data is None:
-                data = np.array(batch[0])
-                target = np.array(batch[1])
-            else:
-                data = np.concatenate((data, np.array(batch[0])), axis=0)
-                target = np.concatenate((target, np.array(batch[1])), axis=0)
-        return data, target
+    # Define transformations
+    if data_type == 'train' or data_type == 'val':
+        data_transforms = transforms.Compose([
+            transforms.Resize((IMG_HEIGHT, IMG_WIDTH)),
+            transforms.ToTensor(),
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        ])
+    else:
+        return None
 
-    dataset_data, dataset_target = transform_data(dataset)
+    image_datasets = datasets.ImageFolder(os.path.join(PATH_DATASET, data_type),
+                                          data_transforms)
+    dataloader = DataLoader(image_datasets, batch_size=BATCH_SIZE,
+                            shuffle=False, num_workers=0)
+    class_names = image_datasets.classes
 
-    return dataset_data, dataset_target
+    images_list = []
+    labels_list = []
 
+    for images_batch, labels_batch in dataloader:
+        images_list.append(images_batch.numpy())  # Convert to NumPy immediately
+        labels_list.append(labels_batch.numpy())
 
+    images_array = np.concatenate(images_list, axis=0)
+    labels_array = np.concatenate(labels_list, axis=0)
+
+    return images_array, labels_array, class_names

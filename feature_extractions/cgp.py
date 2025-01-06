@@ -1,7 +1,7 @@
 import random
 import numpy as np
+from tqdm import tqdm
 from typing import List, Tuple, Type
-from classifications import evaluation
 
 
 #INPUT_SHAPE: (height, width, channels)
@@ -114,8 +114,6 @@ def evaluate(genome: List[float], image: np.ndarray) -> np.ndarray:
 
 def evolve(train_images: List[np.ndarray],
             train_labels: List[int],
-            test_images: List[np.ndarray],
-            test_labels: List[int],
             eval_model: Type,
             n_generations: int = 100,
             population_size: int = 50,
@@ -126,8 +124,6 @@ def evolve(train_images: List[np.ndarray],
     Args:
         train_images: List of training images
         train_labels: List of training labels
-        test_images: List of testing images
-        test_labels: List of testing labels
         n_generations: Number of generations to evolve
         population_size: Size of the population
         mutation_rate: Probability of mutation per gene
@@ -140,20 +136,17 @@ def evolve(train_images: List[np.ndarray],
     # Initialize population
     population = [create_individual() for _ in range(population_size)]
     
-    # Convert labels to one-hot encoding
-    n_classes = len(set(train_labels))
-    labels_onehot = np.eye(n_classes)[train_labels]
-    labels_test_onehot = np.eye(n_classes)[test_labels]
+    # # Convert labels to one-hot encoding
+    # n_classes = len(set(train_labels))
+    # labels_onehot = np.eye(n_classes)[train_labels]
     
     def compute_fitness(genome: List[float]) -> float:
         """Compute fitness as classification accuracy"""
-        features_array = np.stack([evaluate(genome, image) for image in train_images])
-        features_test_array = np.stack([evaluate(genome, image) for image in test_images])
+        features_array = np.stack([evaluate(genome, image) for image in tqdm(train_images, desc="    Genoma Evaluation Progress")])
         
         # training Model
-        eval_model.fit(features_array, labels_onehot)
-        return [evaluation.roc_auc_score(eval_model.predict(features_array), labels_onehot),
-               evaluation.roc_auc_score(eval_model.predict(features_test_array), labels_test_onehot)]
+        eval_model.fit(features_array, train_labels)
+        return eval_model.score(features_array, train_labels)
         
 
     for generation in range(n_generations):
@@ -161,13 +154,11 @@ def evolve(train_images: List[np.ndarray],
         fitnesses = [compute_fitness(genome) for genome in population]
         
         # Select best individual
-        best_idx = np.argmax(fitnesses, axis=1)[1]
+        best_idx = np.argmax(fitnesses)
         best_genome = population[best_idx]
-        best_train_fitness = fitnesses[best_idx][0]
-        best_test_fitness = fitnesses[best_idx][1]
+        best_fitness = fitnesses[best_idx]
         
-        print(f"""Generation {generation + 1}/{n_generations}, Best Training Fitness: {best_train_fitness:.4f}
-                 Best Testing Fitness: {best_test_fitness:.4f}""")
+        print(f"""Generation {generation + 1}/{n_generations}, Best Fitness: {best_fitness:.4f}""")
         
         # Create new population through mutation
         new_population = [best_genome]  # Keep best individual (elitism)
@@ -176,7 +167,7 @@ def evolve(train_images: List[np.ndarray],
         
         population = new_population
         
-    return best_genome, best_test_fitness
+    return best_genome, best_fitness
 
 # def extract_features(image_path: str, cgp_genome: List[float], cgp_instance: ImageCGP) -> np.ndarray:
 #     """Utility function to extract features from a new image using trained CGP"""
