@@ -1,5 +1,5 @@
 # https://github.com/visionatseecs/keras-starter/blob/main/keras_alexnet.ipynb
-from feature_extractions import cnn
+from feature_extractions import conv_layers as cnn
 
      
 def sequency(images_batch):
