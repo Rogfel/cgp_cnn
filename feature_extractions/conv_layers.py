@@ -14,8 +14,8 @@ class Layers:
         return keras.layers.Rescaling(1./255)(image)
 
     @classmethod
-    def conv2D(cls, image, filters=32, kernel_size=3):
-        return keras.layers.Conv2D(filters=filters, kernel_size=kernel_size, activation='relu')(image)
+    def conv2D(cls, image, filters=32, kernel_size=3, padding='valid', activation='relu'):
+        return keras.layers.Conv2D(filters=filters, kernel_size=kernel_size, padding=padding, activation=activation)(image)
 
     @classmethod
     def maxPool2D(cls, image, pool_sizes=2, strides=2):
@@ -28,11 +28,11 @@ class Layers:
                                             padding="valid")(image)
     @classmethod
     def concatenate(cls, image0, image1):
-        return keras.layers.concatenate(axis=1)([image0, image1])
+        return keras.layers.Concatenate(axis=1)([image0, image1])
 
     @classmethod
     def summation(cls, image0, image1):
-        return keras.layers.add(axis=1)([image0, image1])
+        return keras.layers.Add()([image0, image1])
 
     @classmethod
     def flatten(cls, image):

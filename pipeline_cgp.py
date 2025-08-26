@@ -2,6 +2,7 @@ from dataset import load
 from feature_extractions import cgp
 from feature_extractions.vision import vision_functions
 from classifications import DT
+from classifications import random_forests as RF
 from sklearn.model_selection import train_test_split
 
 
@@ -26,9 +27,9 @@ cgp.N_NODES = cgp.get_n_nodes()
 best_genome, best_fitness, val_fitness = cgp.evolve(
     X_train, y_train,
     X_val, y_val,
-    n_generations=100,
-    population_size=50,
-    eval_model=DT.classification_model(),
+    n_generations=5,
+    population_size=15,
+    eval_model=RF.classification_model(),
     mutation_rate=0.1
 )
 
