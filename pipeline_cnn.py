@@ -198,10 +198,11 @@ if __name__ == '__main__':
     
     # Criar modelo ResNet
     print('*****2/4 Create ResNet model')
+    resnet_type = 'resnet18'  # Define the ResNet type
     model = ResNetPipeline.create_resnet_model(
         input_shape=(load.IMG_HEIGHT, load.IMG_WIDTH, 3), 
         num_classes=len(classes), 
-        resnet_type='resnet18'
+        resnet_type=resnet_type
     )
     
     # Compilar modelo
@@ -231,6 +232,29 @@ if __name__ == '__main__':
     test_loss, test_accuracy = model.evaluate(X_val, y_val, verbose=0)
     print(f"Validation accuracy: {test_accuracy:.4f}")
     print(f"Validation loss: {test_loss:.4f}")
+    
+    # Save the model with ResNet type in the name
+    model_filename = f"resnet_model_{resnet_type}.h5"
+    model.save(model_filename)
+    print(f"Model saved as: {model_filename}")
+    
+    # Save training history
+    import json
+    history_filename = f"resnet_history_{resnet_type}.json"
+    history_dict = {
+        'accuracy': [float(x) for x in history.history['accuracy']],
+        'val_accuracy': [float(x) for x in history.history['val_accuracy']],
+        'loss': [float(x) for x in history.history['loss']],
+        'val_loss': [float(x) for x in history.history['val_loss']],
+        'final_validation_accuracy': float(test_accuracy),
+        'final_validation_loss': float(test_loss),
+        'resnet_type': resnet_type,
+        'epochs': len(history.history['accuracy'])
+    }
+    
+    with open(history_filename, 'w') as f:
+        json.dump(history_dict, f, indent=2)
+    print(f"Training history saved as: {history_filename}")
     
     # Testar com alguns exemplos
     print("\nTesting with sample data:")

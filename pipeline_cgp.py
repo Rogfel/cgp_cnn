@@ -27,10 +27,10 @@ cgp.N_NODES = cgp.get_n_nodes()
 best_genome, best_fitness, val_fitness = cgp.evolve(
     X_train, y_train,
     X_val, y_val,
-    n_generations=5,
-    population_size=15,
+    n_generations=10000,
+    population_size=4,
     eval_model=RF.classification_model(),
-    mutation_rate=0.1
+    mutation_rate=0.2
 )
 
 print(f"Training completed.")
