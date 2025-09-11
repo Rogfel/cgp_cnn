@@ -198,7 +198,7 @@ if __name__ == '__main__':
     
     # Criar modelo ResNet
     print('*****2/4 Create ResNet model')
-    resnet_type = 'resnet18'  # Define the ResNet type
+    resnet_type = 'resnet34'  # Define the ResNet type
     model = ResNetPipeline.create_resnet_model(
         input_shape=(load.IMG_HEIGHT, load.IMG_WIDTH, 3), 
         num_classes=len(classes), 

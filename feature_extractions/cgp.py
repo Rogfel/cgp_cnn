@@ -144,6 +144,12 @@ def save_best_genome(genome: List[float], train_fitness: float, val_fitness: flo
         json.dump(data, f, indent=2)
 
 
+def save_evolution_history(history: dict, filename: str = "evolution_history.json"):
+    """Save the complete evolution history to a JSON file"""
+    with open(filename, 'w') as f:
+        json.dump(history, f, indent=2)
+
+
 def evolve(train_images: List[np.ndarray],
           train_labels: List[int],
           val_images: List[np.ndarray],
@@ -176,6 +182,18 @@ def evolve(train_images: List[np.ndarray],
     best_genome_overall = None
     best_val_fitness = 0
     
+    # Initialize evolution history
+    evolution_history = {
+        "generations": [],
+        "best_training_fitness": [],
+        "best_validation_fitness": [],
+        "population_training_fitness": [],
+        "population_validation_fitness": [],
+        "best_genome": None,
+        "final_best_training_fitness": 0,
+        "final_best_validation_fitness": 0
+    }
+    
     def compute_fitness(genome: List[float], images: List[np.ndarray], labels: List[int], is_training: bool = True) -> float:
         """Compute fitness as classification accuracy"""
         features_array = np.stack([evaluate(genome, image) for image in tqdm(images, 
@@ -201,6 +219,12 @@ def evolve(train_images: List[np.ndarray],
         # Compute validation fitness for best individual
         current_val_fitness = compute_fitness(current_best_genome, val_images, val_labels, is_training=False)
         
+        # Store evolution history for this generation
+        evolution_history["generations"].append(generation + 1)
+        evolution_history["best_training_fitness"].append(float(current_best_fitness))
+        evolution_history["best_validation_fitness"].append(float(current_val_fitness))
+        evolution_history["population_training_fitness"].append([float(f) for f in fitnesses])
+        
         # Update overall best if validation fitness improves
         if current_val_fitness > best_val_fitness:
             best_genome_overall = current_best_genome
@@ -208,6 +232,12 @@ def evolve(train_images: List[np.ndarray],
             best_val_fitness = current_val_fitness
             # Save the best genome whenever we find a better one
             save_best_genome(best_genome_overall, best_fitness_overall, best_val_fitness)
+            save_evolution_history(evolution_history)
+        
+        # Compute validation fitness for all individuals in population (optional - can be slow)
+        # Uncomment the next line if you want to track all validation fitnesses
+        # val_fitnesses = [compute_fitness(genome, val_images, val_labels, is_training=False) for genome in population]
+        # evolution_history["population_validation_fitness"].append([float(f) for f in val_fitnesses])
         
         print(f"Generation {generation + 1}/{n_generations}")
         print(f"Best Training Fitness: {current_best_fitness:.4f}")
@@ -236,7 +266,10 @@ def evolve(train_images: List[np.ndarray],
             new_population.append(child)
         
         population = new_population
-        
+
+    # Save evolution history
+    save_evolution_history(evolution_history)
+    
     return best_genome_overall, best_fitness_overall, best_val_fitness
 
 

@@ -14,7 +14,7 @@ images, labels, classes = load.data(data_type='train')
 
 # Split data into train and validation sets
 X_train, X_val, y_train, y_val = train_test_split(
-    images, labels, test_size=0.2, random_state=42, stratify=labels
+    images, labels, test_size=0.4, random_state=42, stratify=labels
 )
 
 # feature extraction
@@ -29,7 +29,7 @@ best_genome, best_fitness, val_fitness = cgp.evolve(
     X_val, y_val,
     n_generations=10000,
     population_size=4,
-    eval_model=RF.classification_model(),
+    eval_model=DT.classification_model(),
     mutation_rate=0.2
 )
 
