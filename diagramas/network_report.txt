@@ -1,0 +1,24 @@
+=== CGP Network Analysis Report ===
+
+Total de nós: 143
+Total de arestas: 151
+Nós de entrada: 2
+Nós de processamento: 77
+Nós de saída: 64
+
+Funções utilizadas:
+  - add
+  - avg_pool
+  - conv3x3
+  - gaussian_blur
+  - laplacian
+  - max_pool
+  - median_blur
+  - multiply
+  - normalize
+  - roberts
+  - sharpen
+  - sobel_x
+  - sobel_y
+  - subtract
+  - threshold
