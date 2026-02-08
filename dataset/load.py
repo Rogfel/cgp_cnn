@@ -1,8 +1,17 @@
 import os
+import warnings
 import numpy as np
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 from torch.utils.data import DataLoader
+
+# Suprimir aviso de TIFF truncado (arquivos corrompidos no dataset)
+warnings.filterwarnings(
+    "ignore",
+    message="Truncated File Read",
+    category=UserWarning,
+    module="PIL.TiffImagePlugin",
+)
 
 
 PATH_DATASET = 'dataset/PetImages/'

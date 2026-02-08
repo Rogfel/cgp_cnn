@@ -167,3 +167,4 @@ dataset/PetImages/*
 genetics/pyCGP-master/*
 *.json
 *.h5
+diagramas/*
