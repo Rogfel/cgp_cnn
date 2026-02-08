@@ -82,10 +82,10 @@
 
 ## 🔄 Melhorias Pendentes (Recomendadas)
 
-### Alta Prioridade
-1. **Cache de Fitness** - Reduzir re-avaliações desnecessárias
-2. **Paralelização** - Acelerar avaliação de população
-3. **Early Stopping** - Parar quando não há melhoria
+### Alta Prioridade ✅ (implementadas)
+1. **Cache de Fitness** - Reduzir re-avaliações desnecessárias ✅
+2. **Paralelização** - Acelerar avaliação de população ✅
+3. **Early Stopping** - Parar quando não há melhoria ✅
 
 ### Média Prioridade
 4. **Refatoração de Variáveis Globais** - Usar classe de configuração
@@ -96,6 +96,27 @@
 7. **Testes Unitários** - Garantir qualidade
 8. **Versionamento de Modelos** - Compatibilidade futura
 9. **Batch Processing** - Otimizar avaliação
+
+---
+
+## Cache, paralelização e early stopping (evolve)
+
+- **Cache de fitness:** Cada genoma avaliado é guardado em `fitness_cache` (chave = `tuple(genome)`). Se o mesmo genoma reaparecer (ex.: elitismo ou crossover que repete), não se reavalia — usa-se o modelo e o fitness em cache. O tamanho do cache é logado a cada geração.
+- **Paralelização:** `evolve(..., n_jobs=N)` com `N > 1` ou `N = -1` usa `joblib.Parallel` para avaliar vários indivíduos em paralelo. Cada worker clona o `eval_model` (via `sklearn.clone`), treina e devolve (fitness, model). Com `n_jobs=1` (default) tudo roda em sequência.
+- **Early stopping:** `evolve(..., early_stopping_patience=M)` interrompe se a fitness de validação não melhorar por `M` gerações seguidas. `None` (default) = desligado.
+
+Exemplo:
+
+```python
+cgp.evolve(
+    X_train, y_train, X_val, y_val,
+    eval_model=DT.classification_model(),
+    n_generations=1000,
+    population_size=8,
+    n_jobs=4,                      # 4 processos
+    early_stopping_patience=50,
+)
+```
 
 ---
 

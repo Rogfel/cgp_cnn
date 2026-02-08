@@ -1,10 +1,20 @@
 import random
 import numpy as np
 from tqdm import tqdm
-from typing import List, Tuple, Type, Optional
+from typing import List, Tuple, Type, Optional, Any, Dict
 import json
 import os
 import logging
+
+try:
+    from joblib import Parallel, delayed
+except ImportError:
+    Parallel = None
+    delayed = None
+try:
+    from sklearn.base import clone as sklearn_clone
+except ImportError:
+    sklearn_clone = None
 
 # Configurar logging
 logger = logging.getLogger(__name__)
@@ -323,27 +333,62 @@ def save_evolution_history(history: dict, filename: str = "evolution_history.jso
         raise
 
 
-def evolve(train_images: List[np.ndarray],
-          train_labels: List[int],
-          val_images: List[np.ndarray],
-          val_labels: List[int],
-          eval_model: Type,
-          n_generations: int = 100,
-          population_size: int = 50,
-          mutation_rate: float = 0.1) -> Tuple[List[float], float, float]:
+def _genome_cache_key(genome: List[float]) -> tuple:
+    """Chave hashável para cache de fitness (tuple de floats)."""
+    return tuple(genome)
+
+
+def _compute_fitness_single(
+    genome: List[float],
+    train_images: List[np.ndarray],
+    train_labels: List[int],
+    eval_model: Any,
+    use_tqdm: bool = True,
+) -> Tuple[float, Any]:
     """
-    Evolve the CGP population
-    
+    Avalia um único genoma: extrai features, treina um clone do modelo, retorna (fitness, model).
+    Usado com ou sem paralelização. Cada chamada usa um clone do eval_model.
+    """
+    if sklearn_clone is None:
+        raise ImportError("sklearn.base.clone is required; install scikit-learn")
+    features_array = np.stack([
+        evaluate(genome, image)
+        for image in (tqdm(train_images, desc="    Training Evaluation") if use_tqdm else train_images)
+    ])
+    model = sklearn_clone(eval_model)
+    model.fit(features_array, train_labels)
+    fitness = model.score(features_array, train_labels)
+    return (float(fitness), model)
+
+
+def evolve(
+    train_images: List[np.ndarray],
+    train_labels: List[int],
+    val_images: List[np.ndarray],
+    val_labels: List[int],
+    eval_model: Any,
+    n_generations: int = 100,
+    population_size: int = 50,
+    mutation_rate: float = 0.1,
+    n_jobs: int = 1,
+    early_stopping_patience: Optional[int] = None,
+) -> Tuple[List[float], float, float]:
+    """
+    Evolve the CGP population.
+
     Args:
         train_images: List of training images
         train_labels: List of training labels
         val_images: List of validation images
         val_labels: List of validation labels
-        eval_model: The model to evaluate the genome sequence
+        eval_model: Model instance (will be cloned per individual). Must be sklearn-like (fit, score).
         n_generations: Number of generations to evolve
         population_size: Size of the population
         mutation_rate: Probability of mutation per gene
-        
+        n_jobs: Number of parallel jobs for fitness evaluation. 1 = sequential, -1 = all cores.
+        early_stopping_patience: Stop if validation fitness does not improve for this many generations.
+            None = disabled.
+
     Returns:
         best_genome: Best performing genome
         best_fitness: Training fitness of the best genome
@@ -351,11 +396,19 @@ def evolve(train_images: List[np.ndarray],
     """
     # Initialize population
     population = [create_individual() for _ in range(population_size)]
-    best_fitness_overall = 0
+    best_fitness_overall = 0.0
     best_genome_overall = None
-    best_val_fitness = 0
+    best_val_fitness = 0.0
     best_model_overall = None
-    
+
+    # Cache de fitness: evita re-avaliar o mesmo genoma (key = tuple(genome) -> (fitness, model))
+    fitness_cache: Dict[tuple, Tuple[float, Any]] = {}
+
+    # Early stopping
+    generations_without_improvement = 0
+    if early_stopping_patience is not None and early_stopping_patience < 1:
+        early_stopping_patience = None
+
     # Initialize evolution history
     evolution_history = {
         "generations": [],
@@ -365,89 +418,121 @@ def evolve(train_images: List[np.ndarray],
         "population_validation_fitness": [],
         "best_genome": None,
         "final_best_training_fitness": 0,
-        "final_best_validation_fitness": 0
+        "final_best_validation_fitness": 0,
     }
-    
-    def compute_fitness(genome: List[float], images: List[np.ndarray], labels: List[int], is_training: bool = True):
-        """Compute fitness as classification accuracy and return trained model if training"""
-        features_array = np.stack([evaluate(genome, image) for image in tqdm(images, 
-            desc="    Training Evaluation" if is_training else "    Validation Evaluation")])
-        
-        if is_training:
-            # Fit model on training data
-            eval_model.fit(features_array, labels)
-            return eval_model.score(features_array, labels), eval_model
-        else:
-            # Evaluate on validation data
-            return eval_model.score(features_array, labels)
+
+    def compute_validation_fitness(genome: List[float], model: Any) -> float:
+        """Calcula fitness de validação usando o modelo já treinado."""
+        features_array = np.stack([
+            evaluate(genome, image)
+            for image in tqdm(val_images, desc="    Validation Evaluation")
+        ])
+        return float(model.score(features_array, val_labels))
 
     for generation in range(n_generations):
-        # Evaluate fitness for all individuals
-        fitness_results = [compute_fitness(genome, train_images, train_labels) for genome in population]
-        fitnesses = [result[0] for result in fitness_results]  # Extract fitness scores
-        trained_models = [result[1] for result in fitness_results]  # Extract trained models
-        
+        # --- Avaliar fitness da população (com cache e opcionalmente em paralelo) ---
+        results: List[Optional[Tuple[float, Any]]] = [None] * len(population)
+        to_compute: List[Tuple[int, List[float]]] = []
+
+        for i, genome in enumerate(population):
+            key = _genome_cache_key(genome)
+            if key in fitness_cache:
+                results[i] = fitness_cache[key]
+            else:
+                to_compute.append((i, genome))
+
+        if to_compute:
+            if n_jobs == 1 or Parallel is None or delayed is None:
+                iterator = tqdm(to_compute, desc="    Individuals") if len(to_compute) > 1 else to_compute
+                for i, genome in iterator:
+                    fit, model = _compute_fitness_single(
+                        genome, train_images, train_labels, eval_model, use_tqdm=(len(to_compute) == 1)
+                    )
+                    results[i] = (fit, model)
+                    fitness_cache[_genome_cache_key(genome)] = (fit, model)
+            else:
+                computed = Parallel(n_jobs=n_jobs)(
+                    delayed(_compute_fitness_single)(
+                        genome, train_images, train_labels, eval_model, use_tqdm=False
+                    )
+                    for _, genome in to_compute
+                )
+                for idx, (i, genome) in enumerate(to_compute):
+                    fit, model = computed[idx]
+                    results[i] = (fit, model)
+                    fitness_cache[_genome_cache_key(genome)] = (fit, model)
+
+        fitnesses = [r[0] for r in results]
+        trained_models = [r[1] for r in results]
+
         # Select best individual
-        best_idx = np.argmax(fitnesses)
+        best_idx = int(np.argmax(fitnesses))
         current_best_genome = population[best_idx]
         current_best_fitness = fitnesses[best_idx]
         current_best_model = trained_models[best_idx]
-        
-        # Compute validation fitness for best individual
-        current_val_fitness = compute_fitness(current_best_genome, val_images, val_labels, is_training=False)
-        
-        # Store evolution history for this generation
+
+        # Validation fitness do melhor
+        current_val_fitness = compute_validation_fitness(current_best_genome, current_best_model)
+
+        # Evolution history
         evolution_history["generations"].append(generation + 1)
         evolution_history["best_training_fitness"].append(float(current_best_fitness))
         evolution_history["best_validation_fitness"].append(float(current_val_fitness))
         evolution_history["population_training_fitness"].append([float(f) for f in fitnesses])
-        
-        # Update overall best if validation fitness improves
+
+        # Atualizar melhor global e early stopping
         if current_val_fitness > best_val_fitness:
             best_genome_overall = current_best_genome
             best_fitness_overall = current_best_fitness
             best_val_fitness = current_val_fitness
             best_model_overall = current_best_model
-            # Save the best genome and model whenever we find a better one
-            save_best_genome(best_genome_overall, best_fitness_overall, best_val_fitness, best_model_overall)
+            generations_without_improvement = 0
+            save_best_genome(
+                best_genome_overall, best_fitness_overall, best_val_fitness, best_model_overall
+            )
             save_evolution_history(evolution_history)
-        
-        # Compute validation fitness for all individuals in population (optional - can be slow)
-        # Uncomment the next line if you want to track all validation fitnesses
-        # val_fitnesses = [compute_fitness(genome, val_images, val_labels, is_training=False) for genome in population]
-        # evolution_history["population_validation_fitness"].append([float(f) for f in val_fitnesses])
-        
-        logger.info(f"Generation {generation + 1}/{n_generations}")
-        logger.info(f"Best Training Fitness: {current_best_fitness:.4f}")
-        logger.info(f"Validation Fitness: {current_val_fitness:.4f}")
-        
-        # Create new population
-        new_population = [current_best_genome]  # Elitism
-        
-        # Tournament selection
+        else:
+            generations_without_improvement += 1
+
+        logger.info(
+            "Generation %d/%d | Train fitness: %.4f | Val fitness: %.4f | Cache size: %d",
+            generation + 1,
+            n_generations,
+            current_best_fitness,
+            current_val_fitness,
+            len(fitness_cache),
+        )
+
+        if (
+            early_stopping_patience is not None
+            and generations_without_improvement >= early_stopping_patience
+        ):
+            logger.info(
+                "Early stopping at generation %d (no improvement for %d generations)",
+                generation + 1,
+                early_stopping_patience,
+            )
+            break
+
+        # Nova população (elitismo + torneio)
+        new_population = [current_best_genome]
         tournament_size = 3
+        pop_fitness = list(zip(population, fitnesses))
         while len(new_population) < population_size:
-            if random.random() < 0.7:  # 70% chance of crossover
-                # Select parents through tournament selection
-                parent1 = max(random.sample(list(zip(population, fitnesses)), tournament_size), 
-                            key=lambda x: x[1])[0]
-                parent2 = max(random.sample(list(zip(population, fitnesses)), tournament_size), 
-                            key=lambda x: x[1])[0]
-                child = crossover(parent1, parent2)
-                child = mutate(child, mutation_rate)
+            if random.random() < 0.7:
+                parent1 = max(random.sample(pop_fitness, tournament_size), key=lambda x: x[1])[0]
+                parent2 = max(random.sample(pop_fitness, tournament_size), key=lambda x: x[1])[0]
+                child = mutate(crossover(parent1, parent2), mutation_rate)
             else:
-                # Select parent through tournament selection
-                parent = max(random.sample(list(zip(population, fitnesses)), tournament_size), 
-                           key=lambda x: x[1])[0]
+                parent = max(random.sample(pop_fitness, tournament_size), key=lambda x: x[1])[0]
                 child = mutate(parent, mutation_rate)
-            
             new_population.append(child)
-        
         population = new_population
 
-    # Save evolution history
+    evolution_history["final_best_training_fitness"] = float(best_fitness_overall or 0)
+    evolution_history["final_best_validation_fitness"] = float(best_val_fitness or 0)
     save_evolution_history(evolution_history)
-    
+
     return best_genome_overall, best_fitness_overall, best_val_fitness
 
 

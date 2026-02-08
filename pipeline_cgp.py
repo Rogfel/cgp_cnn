@@ -23,14 +23,16 @@ print('*****2/4 Init feature extraction')
 cgp.INPUT_SHAPE = (load.IMG_HEIGHT, load.IMG_WIDTH, 3)  # RGB images
 cgp.FUNCTIONS = vision_functions()
 cgp.N_NODES = cgp.get_n_nodes()
-# Evolve CGP
+# Evolve CGP (cache de fitness, paralelização e early stopping opcionais)
 best_genome, best_fitness, val_fitness = cgp.evolve(
     X_train, y_train,
     X_val, y_val,
     n_generations=10000,
     population_size=4,
     eval_model=DT.classification_model(),
-    mutation_rate=0.2
+    mutation_rate=0.2,
+    n_jobs=1,                    # 1=sequencial; -1 ou N para paralelo
+    early_stopping_patience=100, # parar se val não melhorar em N gerações (None=desligado)
 )
 
 print(f"Training completed.")
