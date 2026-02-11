@@ -1,0 +1,42 @@
+Sugestões de novas funções
+Detecção de bordas / gradiente
+Sobel magnitude – sqrt(sobel_x² + sobel_y²). Uma única função que combina X e Y; útil como alternativa ao uso separado de sobel_x e sobel_y.
+Canny – Bordas com limiar baixo e alto (podem vir dos parâmetros). Dá bordas mais “limpas” que Sobel/Roberts.
+Scharr – Similar ao Sobel, kernels 3×3 que aproximam melhor a derivada; pode substituir ou complementar Sobel.
+Prewitt – Outro operador de gradiente (horizontal/vertical); mais uma opção de “borda” para a evolução escolher.
+Textura e padrões
+LBP (Local Binary Pattern) – Descreve textura local (muito usado em pelagem/pele). Retorna um mapa que pode ser agregado com média/std no CGP.
+Gabor – Filtro orientado (ângulo + frequência); bom para textura e orientação. O parâmetro pode controlar ângulo ou escala.
+Variação local (local variance) – Por janela (ex.: 3×3 ou 5×5), variance(patches). Dá resposta forte em textura e bordas.
+Entropia local – Entropia em janelas deslizantes; mede “desordem” local (textura, detalhe).
+Cor e canais
+Escala de cinza – 0.299*R + 0.587*G + 0.114*B. Reduz 3 canais a 1; outras funções podem então trabalhar em “luminância”.
+Canal único – Selecionar um canal (R, G ou B) por parâmetro; útil se a evolução quiser focar em um canal.
+Saturação (HSV) – Converter RGB→HSV e devolver só o canal S (ou H). Ajuda a separar cor de brilho.
+Diferença entre canais – Ex.: R−G, G−B; realça diferenças de cor (útil para animais vs fundo).
+Morfologia e forma
+Erosão / dilatação – Operadores morfológicos binários (ou em níveis de cinza); afinam/expandem regiões. Parâmetro = tamanho do elemento.
+Abertura / fechamento – Erosão+dilatação ou dilatação+erosão; suavizam contornos e preenchem buracos.
+Gradiente morfológico – Dilatação − erosão; destaca contornos de objetos.
+Escala e estrutura
+Laplacian of Gaussian (LoG) – Gaussiana + Laplaciano; detector de “blobs” e bordas em uma escala. Parâmetro = sigma.
+Difference of Gaussians (DoG) – Diferença entre duas Gaussianas (sigma pequeno e grande); aproximação barata de certos detectores de escala.
+Bilateral filter – Suaviza preservando bordas (peso por distância e por diferença de intensidade). Parâmetro pode controlar sigma espacial ou de intensidade.
+Estatísticas locais
+Mínimo/máximo local – minimum_filter / maximum_filter (já tem max_pool, mas um “min_pool” ou filtro de mínimo pode ajudar).
+Percentil local – Ex.: mediana já existe; poderia ter p25 ou p75 por janela para robustez a outliers.
+Outras
+Abs / valor absoluto – np.abs(x); útil após subtração ou Sobel para não perder sinal.
+Clip / normalizar para [0,1] – Garantir que a saída está em intervalo controlado antes de passar para o próximo nó.
+Power / gamma – x**gamma (gamma como parâmetro); realça sombras ou realces.
+Contrast stretch – Normalização por percentis (ex.: 2% e 98%) em vez de min/max; mais robusta a outliers.
+Prioridade sugerida para implementar
+Sobel magnitude – Fácil, combina o que você já tem.
+Escala de cinza – Reduz canais e deixa o grafo mais estável.
+Local variance – Uma linha com ndimage.generic_filter ou convolução; boa para textura.
+Erosão/dilatação (ou abertura) – scipy.ndimage ou cv2; ajudam em forma/contorno.
+LoG ou DoG – Mais informação de escala; um parâmetro (sigma) já encaixa no seu esquema.
+LBP – Um pouco mais trabalho, mas muito relevante para pelagem/rosto.
+Todas podem seguir o padrão atual: entrada(s) np.ndarray, parâmetro float, saída com mesmo shape e, de preferência, em float (evitar uint8 para não misturar tipos como em roberts/median_blur/sharpen).
+Se quiser, no modo Agent posso propor assinaturas concretas (nome, n_inputs, uso do param) e esboço de implementação para cada uma dessas em vision.py.
+implementa as sugeridas
