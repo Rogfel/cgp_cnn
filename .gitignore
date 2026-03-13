@@ -169,3 +169,4 @@ genetics/pyCGP-master/*
 *.h5
 *.pkl
 diagramas/*
+visualization_output/*

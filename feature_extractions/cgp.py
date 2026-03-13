@@ -28,13 +28,13 @@ if not logger.handlers:
 #INPUT_SHAPE: (height, width, channels)
 INPUT_SHAPE=None
 #N_COLUMNS: Number of columns in CGP grid
-N_COLUMNS=20
+N_COLUMNS=40
 #N_ROWS: Number of rows in CGP grid
-N_ROWS=5
+N_ROWS=10
 #N_BACK: Number of columns to look back for connections
-N_BACK=10
+N_BACK=25
 #N_OUTPUTS: Number of features to extract
-N_OUTPUTS=16
+N_OUTPUTS=32
 # Define available functions
 FUNCTIONS = None
 # Calculate genome length
@@ -45,6 +45,45 @@ N_NODES=None
 
 def get_n_nodes():
     return N_COLUMNS * N_ROWS
+
+
+def _extract_pooling_features(feature_map: np.ndarray) -> np.ndarray:
+    """
+    Extrai múltiplas estatísticas de pooling de um feature map.
+    
+    Args:
+        feature_map: Array 2D ou 3D representando um feature map
+        
+    Returns:
+        Array com estatísticas extraídas
+    """
+    # Garantir 2D
+    if len(feature_map.shape) == 3:
+        feature_map = feature_map.reshape(-1, feature_map.shape[-1])
+    
+    # Flatten para cálculo de estatísticas
+    flat = feature_map.flatten()
+    
+    features = []
+    
+    # Estatísticas básicas
+    features.append(np.mean(flat))
+    features.append(np.std(flat))
+    features.append(np.max(flat))
+    features.append(np.min(flat))
+    
+    # Percentis
+    features.append(np.percentile(flat, 25))
+    features.append(np.percentile(flat, 50))  # mediana
+    features.append(np.percentile(flat, 75))
+    
+    # Energia e outras métricas
+    features.append(np.sum(flat ** 2) / flat.size)  # energia
+    
+    # Range dinâmico
+    features.append(np.max(flat) - np.min(flat))
+    
+    return np.array(features)
 
 
 def get_genome_length():
@@ -239,7 +278,7 @@ def evaluate(genome: List[float], image: np.ndarray) -> np.ndarray:
         
         node_outputs.append(output)
     
-    # Collect output features
+    # Collect output features - multi-feature pooling
     output_genes = genome[-N_OUTPUTS:]
     features = []
     for output_idx in output_genes:
@@ -248,8 +287,9 @@ def evaluate(genome: List[float], image: np.ndarray) -> np.ndarray:
             logger.warning(f"Invalid output index {idx}, using index 0")
             idx = 0
         output = node_outputs[idx]
-        # Global average pooling for each feature map
-        features.append(np.mean(output))
+        # Multi-feature pooling (9 features por output)
+        pooling_features = _extract_pooling_features(output)
+        features.extend(pooling_features)
         
     return np.array(features)
 
@@ -355,6 +395,11 @@ def _compute_fitness_single(
         evaluate(genome, image)
         for image in (tqdm(train_images, desc="    Training Evaluation") if use_tqdm else train_images)
     ])
+    
+    # Tratar valores infinitos ou muito grandes
+    features_array = np.nan_to_num(features_array, nan=0.0, posinf=1e6, neginf=-1e6)
+    features_array = np.clip(features_array, -1e6, 1e6)
+    
     model = sklearn_clone(eval_model)
     model.fit(features_array, train_labels)
     fitness = model.score(features_array, train_labels)
@@ -427,6 +472,8 @@ def evolve(
             evaluate(genome, image)
             for image in tqdm(val_images, desc="    Validation Evaluation")
         ])
+        features_array = np.nan_to_num(features_array, nan=0.0, posinf=1e6, neginf=-1e6)
+        features_array = np.clip(features_array, -1e6, 1e6)
         return float(model.score(features_array, val_labels))
 
     for generation in range(n_generations):
@@ -598,12 +645,297 @@ def predict_with_saved_model(genome_data: dict, dt_model, image: np.ndarray):
     
     # Evaluate genome to get features
     features = evaluate(genome, image)
+    features = np.nan_to_num(features, nan=0.0, posinf=1e6, neginf=-1e6)
+    features = np.clip(features, -1e6, 1e6)
     
     # Make prediction
     prediction = dt_model.predict([features])
     prediction_proba = dt_model.predict_proba([features])
     
     return prediction[0], prediction_proba[0]
+
+
+# ==================== APRENDIZADO ATIVO ====================
+
+def compute_uncertainty_scores(
+    genome: List[float],
+    unlabeled_images: List[np.ndarray],
+    classifier: Any
+) -> np.ndarray:
+    """
+    Calcula scores de incerteza para imagens não rotuladas.
+    Usa a entropia das probabilidades previstas.
+    
+    Args:
+        genome: Genoma do CGP
+        unlabeled_images: Lista de imagens não rotuladas
+        classifier: Classificador sklearn-like
+    
+    Returns:
+        Array de scores de incerteza (maior = mais incerto)
+    """
+    uncertainties = []
+    
+    for image in unlabeled_images:
+        features = evaluate(genome, image)
+        features = np.nan_to_num(features, nan=0.0, posinf=1e6, neginf=-1e6)
+        features = np.clip(features, -1e6, 1e6)
+        features_2d = features.reshape(1, -1)
+        
+        # Usar modelo se disponível, senão skip
+        if hasattr(classifier, 'predict_proba'):
+            proba = classifier.predict_proba(features_2d)
+            # Entropia: -sum(p * log(p))
+            proba = np.clip(proba, 1e-10, 1)  # Evitar log(0)
+            entropy = -np.sum(proba * np.log(proba))
+            uncertainties.append(entropy)
+        elif hasattr(classifier, 'predict'):
+            # Se só tem predict, usar distância da decisão
+            pred = classifier.predict(features_2d)
+            uncertainties.append(0.0)  # Placeholder
+        else:
+            uncertainties.append(0.0)
+    
+    return np.array(uncertainties)
+
+
+def select_uncertain_samples(
+    genome: List[float],
+    unlabeled_images: List[np.ndarray],
+    classifier: Any,
+    n_samples: int = 5
+) -> Tuple[List[int], np.ndarray]:
+    """
+    Seleciona as n_samples mais incertas do pool não rotulado.
+    
+    Args:
+        genome: Genoma do CGP
+        unlabeled_images: Pool de imagens não rotuladas
+        classifier: Classificador sklearn-like
+        n_samples: Número de amostras a selecionar
+    
+    Returns:
+        Tuple de (índices selecionados, scores de incerteza)
+    """
+    if len(unlabeled_images) <= n_samples:
+        return list(range(len(unlabeled_images))), np.arange(len(unlabeled_images))
+    
+    uncertainties = compute_uncertainty_scores(genome, unlabeled_images, classifier)
+    
+    # Selecionar as mais incertas (maior entropia)
+    indices = np.argsort(uncertainties)[-n_samples:]
+    
+    return indices.tolist(), uncertainties
+
+
+def query_by_committee(
+    population: List[List[float]],
+    unlabeled_images: List[np.ndarray],
+    n_samples: int = 5
+) -> Tuple[List[int], np.ndarray]:
+    """
+    Query-by-Committee: seleciona amostras onde o committee discorda mais.
+    
+    Args:
+        population: Lista de genomas (committee)
+        unlabeled_images: Pool de imagens não rotuladas
+        n_samples: Número de amostras a selecionar
+    
+    Returns:
+        Tuple de (índices selecionados, scores de discordância)
+    """
+    disagreements = []
+    
+    for image in unlabeled_images:
+        features_list = [evaluate(genome, image) for genome in population]
+        
+        # Calcular variância das features (proxy de discordância)
+        features_array = np.stack(features_list)
+        features_array = np.nan_to_num(features_array, nan=0.0, posinf=1e6, neginf=-1e6)
+        features_array = np.clip(features_array, -1e6, 1e6)
+        variance = np.var(features_array, axis=0)
+        disagreement = np.mean(variance)
+        disagreements.append(disagreement)
+    
+    disagreements = np.array(disagreements)
+    
+    if len(unlabeled_images) <= n_samples:
+        return list(range(len(unlabeled_images))), disagreements
+    
+    indices = np.argsort(disagreements)[-n_samples:]
+    
+    return indices.tolist(), disagreements
+
+
+def evolve_active_learning(
+    train_images: List[np.ndarray],
+    train_labels: List[int],
+    val_images: List[np.ndarray],
+    val_labels: List[int],
+    unlabeled_images: List[np.ndarray],  # Pool de amostras não rotuladas
+    eval_model: Any,
+    n_al_iterations: int = 10,
+    samples_per_iteration: int = 5,
+    n_generations_per_al: int = 50,
+    population_size: int = 50,
+    mutation_rate: float = 0.1,
+    early_stopping_patience: Optional[int] = 50,
+    query_strategy: str = "uncertainty",  # "uncertainty" ou "committee"
+    save_models_dir: str = "saved_models_al",
+) -> Tuple[List[float], float, float, dict]:
+    """
+    Evolui CGP com Aprendizado Ativo.
+    
+    Args:
+        train_images: Imagens de treino iniciais
+        train_labels: Labels de treino iniciais
+        val_images: Imagens de validação
+        val_labels: Labels de validação
+        unlabeled_images: Pool de imagens não rotuladas
+        eval_model: Modelo sklearn-like
+        n_al_iterations: Número de iterações de aprendizado ativo
+        samples_per_iteration: Amostras a adicionar por iteração
+        n_generations_per_al: Gerações de evolução por iteração AL
+        population_size: Tamanho da população CGP
+        mutation_rate: Taxa de mutação
+        early_stopping_patience: Paciência para early stopping
+        query_strategy: "uncertainty" (incerteza) ou "committee" (QBC)
+        save_models_dir: Diretório para salvar os melhores modelos de cada iteração
+    
+    Returns:
+        Tuple de (best_genome, best_train_fitness, best_val_fitness, history)
+    """
+    # Criar diretório para salvar modelos se não existir
+    os.makedirs(save_models_dir, exist_ok=True)
+    # Copiar pools para não modificar originais
+    current_train_images = list(train_images)
+    current_train_labels = list(train_labels)
+    current_unlabeled = list(unlabeled_images)
+    
+    # Histórico do aprendizado ativo
+    al_history = {
+        "iterations": [],
+        "n_train_samples": [],
+        "best_fitness": [],
+        "val_fitness": [],
+        "selected_indices": []
+    }
+    
+    logger.info(f"=== Aprendizado Ativo: {n_al_iterations} iterações ===")
+    logger.info(f"Amostras iniciais: {len(current_train_images)}")
+    logger.info(f"Pool não rotulado: {len(current_unlabeled)}")
+    
+    for al_iter in range(n_al_iterations):
+        logger.info(f"\n--- AL Iteração {al_iter + 1}/{n_al_iterations} ---")
+        logger.info(f"Conjunto de treino: {len(current_train_images)} amostras")
+        
+        # 1. Evoluir CGP com o conjunto atual
+        best_genome, best_fitness, val_fitness = evolve(
+            train_images=current_train_images,
+            train_labels=current_train_labels,
+            val_images=val_images,
+            val_labels=val_labels,
+            eval_model=eval_model,
+            n_generations=n_generations_per_al,
+            population_size=population_size,
+            mutation_rate=mutation_rate,
+            n_jobs=1,
+            early_stopping_patience=early_stopping_patience,
+        )
+        
+        # 2. Treinar classificador final para pseudo-labels
+        final_model = sklearn_clone(eval_model)
+        features_array = np.stack([evaluate(best_genome, img) for img in current_train_images])
+        features_array = np.nan_to_num(features_array, nan=0.0, posinf=1e6, neginf=-1e6)
+        features_array = np.clip(features_array, -1e6, 1e6)
+        final_model.fit(features_array, current_train_labels)
+        
+        # 3. Selecionar novas amostras
+        if query_strategy == "uncertainty":
+            selected_indices, scores = select_uncertain_samples(
+                best_genome, current_unlabeled, final_model, samples_per_iteration
+            )
+        else:  # committee
+            # Usar população como committee
+            population = [create_individual() for _ in range(min(10, population_size))]
+            selected_indices, scores = query_by_committee(
+                population, current_unlabeled, samples_per_iteration
+            )
+        
+        # 4. Adicionar amostras selecionadas ao treino
+        newly_labeled = [current_unlabeled[i] for i in selected_indices]
+        
+        # Gerar pseudo-labels
+        new_features = np.stack([evaluate(best_genome, img) for img in newly_labeled])
+        new_features = np.nan_to_num(new_features, nan=0.0, posinf=1e6, neginf=-1e6)
+        new_features = np.clip(new_features, -1e6, 1e6)
+        pseudo_labels = final_model.predict(new_features)
+        
+        current_train_images.extend(newly_labeled)
+        current_train_labels.extend(pseudo_labels.tolist())
+        
+        # 5. Remover do pool não rotulado
+        current_unlabeled = [img for i, img in enumerate(current_unlabeled) 
+                            if i not in selected_indices]
+        
+        # Registrar histórico
+        al_history["iterations"].append(al_iter + 1)
+        al_history["n_train_samples"].append(len(current_train_images))
+        al_history["best_fitness"].append(float(best_fitness))
+        al_history["val_fitness"].append(float(val_fitness))
+        al_history["selected_indices"].append(selected_indices)
+        
+        logger.info(f"Adicionadas {len(newly_labeled)} amostras")
+        logger.info(f"Fitness treino: {best_fitness:.4f}, Val: {val_fitness:.4f}")
+        logger.info(f"Pool restante: {len(current_unlabeled)} amostras")
+        
+        # Salvar o melhor modelo desta iteração
+        iteration_filename = os.path.join(save_models_dir, f"best_genome_iter_{al_iter + 1:03d}.json")
+        save_best_genome(
+            genome=best_genome,
+            train_fitness=best_fitness,
+            val_fitness=val_fitness,
+            dt_model=final_model,
+            filename=iteration_filename
+        )
+        logger.info(f"Modelo da iteracao {al_iter + 1} salvo em: {iteration_filename}")
+        
+        # Early stopping: se pool acabou
+        if len(current_unlabeled) < samples_per_iteration:
+            logger.info("Pool de amostras não rotuladas esgotado!")
+            break
+    
+    # Evolução final com todo o conjunto rotulado
+    logger.info("\n=== Evolução Final com Todas as Amostras ===")
+    best_genome, best_fitness, val_fitness = evolve(
+        train_images=current_train_images,
+        train_labels=current_train_labels,
+        val_images=val_images,
+        val_labels=val_labels,
+        eval_model=eval_model,
+        n_generations=n_generations_per_al * 2,
+        population_size=population_size,
+        mutation_rate=mutation_rate,
+        early_stopping_patience=None,
+    )
+    
+    al_history["final_genome"] = best_genome
+    al_history["final_train_fitness"] = float(best_fitness)
+    al_history["final_val_fitness"] = float(val_fitness)
+    
+    # Salvar o melhor modelo final
+    final_filename = os.path.join(save_models_dir, "best_genome_final.json")
+    save_best_genome(
+        genome=best_genome,
+        train_fitness=best_fitness,
+        val_fitness=val_fitness,
+        dt_model=None,
+        filename=final_filename
+    )
+    logger.info(f"Modelo final salvo em: {final_filename}")
+    logger.info(f"Todos os modelos salvos em: {save_models_dir}")
+    
+    return best_genome, best_fitness, val_fitness, al_history
 
 
 if __name__ == "__main__":

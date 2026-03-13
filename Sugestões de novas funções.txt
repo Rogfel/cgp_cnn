@@ -38,5 +38,80 @@ Erosão/dilatação (ou abertura) – scipy.ndimage ou cv2; ajudam em forma/cont
 LoG ou DoG – Mais informação de escala; um parâmetro (sigma) já encaixa no seu esquema.
 LBP – Um pouco mais trabalho, mas muito relevante para pelagem/rosto.
 Todas podem seguir o padrão atual: entrada(s) np.ndarray, parâmetro float, saída com mesmo shape e, de preferência, em float (evitar uint8 para não misturar tipos como em roberts/median_blur/sharpen).
-Se quiser, no modo Agent posso propor assinaturas concretas (nome, n_inputs, uso do param) e esboço de implementação para cada uma dessas em vision.py.
-implementa as sugeridas
+
+
+Sugestão para melhorar interpretabilidade:
+Reduzir N_OUTPUTS de 32 para 8-16 (menos features = mais fácil de rastrear)
+Adicionar metadata ao genoma: salvar quais funções foram usadas em cada nodo
+Usar apenas uma estatística de pooling por output (mean ou std)
+
+
+Aprendizado Ativo Implementado no CGP
+Visão Geral
+O aprendizado ativo (Active Learning) é uma técnica onde o modelo aprende a escolher quais amostras quer aprender, em vez de aprender com todas as amostras disponíveis. Isso é útil quando rotular dados é caro/difícil.
+
+Como Funciona no CGP
+┌─────────────────────────────────────────────────────────────┐
+│                    PIPELINE DE APRENDIZADO ATIVO            │
+├─────────────────────────────────────────────────────────────┤
+│  1. COMEÇO: Pequeno conjunto de dados rotulados            │
+│     (ex: 5% do dataset)                                    │
+│                                                             │
+│  2. ITERAÇÃO:                                              │
+│     ┌─────────────────────────────────────────────────────┐  │
+│     │ a) Treinar CGP com dados disponíveis               │  │
+│     │ b) Extrair features das imagens não rotuladas       │  │
+│     │ c) Calcular "incerteza" de cada imagem            │  │
+│     │ d) Selecionar as mais incertas                     │  │
+│     │ e) Gerar pseudo-labels (previsões do CGP)         │  │
+│     │ f) Adicionar ao conjunto de treino                  │  │
+│     └─────────────────────────────────────────────────────┘  │
+│                                                             │
+│  3. REPETIR até atingir número de iterações               │
+└─────────────────────────────────────────────────────────────┘
+Estratégias Implementadas
+1. Incerteza (Uncertainty)
+Seleciona amostras onde o modelo tem menor confiança:
+
+# Calcula entropia das probabilidades previstas
+proba = modelo.predict_proba(features)
+entropy = -sum(p * log(p))  # Maior entropy = mais incerto
+2. Query-by-Committee (QBC)
+Seleciona amostras onde múltiplos genomas discordam:
+
+# Usar variância das features entre diferentes genomas
+variance = var([genome1(image), genome2(image), ...])
+# Maior variância = mais discordância
+Código Principal
+cgp.evolve_active_learning(
+    train_images=X_inicial,
+    train_labels=y_inicial,
+    val_images=X_val,
+    val_labels=y_val,
+    unlabeled_images=X_pool,  # Dados não rotulados
+    n_al_iterations=10,       # 10 iterações de AL
+    samples_per_iteration=5,   # 5 amostras por iteração
+    query_strategy="uncertainty"  # ou "committee"
+)
+Exemplo de Uso
+# Começar com apenas 5% dos dados rotulados
+# 80% fica como pool não rotulado
+# 15% para validação
+
+genome, history = run_pipeline(
+    initial_split=0.05,      # 5% rotulado
+    unlabeled_split=0.80,     # 80% não rotulado
+    n_al_iterations=10,
+    samples_per_iteration=10
+)
+Benefícios
+Benefício	Descrição
+Menos dados necessários	Começa com poucos exemplos
+Rotulagem eficiente	Selecciona as amostras mais úteis
+Custo reduzido	Menos trabalho humano para rotular
+Evolução do Treino
+Iteração 1: 100 amostras → adiciona 10 → 110
+Iteração 2: 110 amostras → adiciona 10 → 120
+...
+Iteração 10: 190 amostras → adiciona 10 → 200
+Quer ver mais detalhes de alguma parte específica?
